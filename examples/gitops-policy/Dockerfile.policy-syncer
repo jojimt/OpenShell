@@ -27,7 +27,7 @@ RUN cargo build --release -p openshell-policy-egress
 FROM debian:bookworm-slim
 
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && apt-get install -y --no-install-recommends ca-certificates curl libssl3 \
   && rm -rf /var/lib/apt/lists/* \
   && ARCH="$(uname -m)" \
   && case "$ARCH" in \
@@ -41,17 +41,19 @@ RUN apt-get update \
   && chmod +x /usr/local/bin/kubectl
 
 ARG OPENSHELL_VERSION
+# CLI releases are musl tarballs (openshell-*-unknown-linux-musl.tar.gz), not gnu.
 RUN ARCH="$(uname -m)" \
   && case "$ARCH" in \
-       x86_64) TARGET="x86_64-unknown-linux-gnu" ;; \
-       aarch64) TARGET="aarch64-unknown-linux-gnu" ;; \
+       x86_64) TARGET="x86_64-unknown-linux-musl" ;; \
+       aarch64) TARGET="aarch64-unknown-linux-musl" ;; \
        *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
      esac \
   && curl -fsSL -o /tmp/openshell.tar.gz \
        "https://github.com/NVIDIA/OpenShell/releases/download/v${OPENSHELL_VERSION}/openshell-${TARGET}.tar.gz" \
   && tar -xzf /tmp/openshell.tar.gz -C /usr/local/bin openshell \
+  && chmod +x /usr/local/bin/openshell \
   && rm /tmp/openshell.tar.gz \
-  && openshell --version || true
+  && /usr/local/bin/openshell --version
 
 COPY --from=policy-egress-builder /src/target/release/openshell-policy-egress /usr/local/bin/openshell-policy-egress
 COPY examples/gitops-policy/apply-policy-gitops.sh /usr/local/bin/apply-policy-gitops.sh
