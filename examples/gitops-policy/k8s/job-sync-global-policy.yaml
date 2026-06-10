@@ -1,0 +1,67 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Argo CD PostSync hook:
+#   - Generates NetworkPolicy from policy.yaml (in-cluster DNS resolution)
+#   - Applies NetworkPolicy via kubectl (not committed to git)
+#   - Runs openshell policy set --global
+#
+# Requires:
+#   - openshell gateway reachable at OPENSHELL_GATEWAY_ENDPOINT
+#   - Secret openshell-client-tls in namespace openshell
+#   - Image built from ../Dockerfile.policy-syncer (push to your registry)
+#   - GATEWAY_CIDR / DNS_CIDR matching your cluster
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openshell-sync-global-policy
+  labels:
+    app.kubernetes.io/part-of: openshell
+    app.kubernetes.io/component: policy-gitops
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/part-of: openshell
+        app.kubernetes.io/component: policy-gitops
+    spec:
+      serviceAccountName: openshell-policy-syncer
+      restartPolicy: OnFailure
+      containers:
+        - name: sync
+          image: jojimt/openshell-policy-syncer:0.0.58
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: OPENSHELL_GATEWAY_ENDPOINT
+              value: https://openshell.openshell.svc.cluster.local:8080
+            - name: OPENSHELL_GATEWAY_NAME
+              value: incluster
+            - name: TARGET_NAMESPACE
+              value: openshell
+            - name: GATEWAY_CIDR
+              value: 10.109.24.243/32
+            - name: DNS_CIDR
+              value: 10.96.0.10/32
+          volumeMounts:
+            - name: policy
+              mountPath: /policy
+              readOnly: true
+            - name: mtls
+              mountPath: /mtls
+              readOnly: true
+          command:
+            - /bin/sh
+            - /usr/local/bin/apply-policy-gitops.sh
+      volumes:
+        - name: policy
+          configMap:
+            name: openshell-policy
+        - name: mtls
+          secret:
+            secretName: openshell-client-tls

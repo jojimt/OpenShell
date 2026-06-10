@@ -1,0 +1,61 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Build from the OpenShell repository root:
+#   docker buildx build --platform linux/amd64 \
+#     -f examples/gitops-policy/Dockerfile.policy-syncer \
+#     --build-arg OPENSHELL_VERSION=0.0.58 \
+#     -t your-org/openshell-policy-syncer:0.0.58 --push .
+
+ARG OPENSHELL_VERSION=0.0.58
+
+FROM rust:1.88-bookworm AS policy-egress-builder
+# ring (via rustls/reqwest) and protobuf-src need a C/C++ toolchain in the builder.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    protobuf-compiler \
+  && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY . .
+RUN cargo build --release -p openshell-policy-egress
+
+# Use Debian (glibc) runtime — the cargo binary from bookworm is not musl-compatible.
+# A glibc binary on Alpine fails with "openshell-policy-egress: not found".
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/* \
+  && ARCH="$(uname -m)" \
+  && case "$ARCH" in \
+       x86_64) KUBECTL_ARCH=amd64 ;; \
+       aarch64) KUBECTL_ARCH=arm64 ;; \
+       *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+     esac \
+  && KUBECTL_VERSION="$(curl -fsSL https://dl.k8s.io/release/stable.txt)" \
+  && curl -fsSL -o /usr/local/bin/kubectl \
+       "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/${KUBECTL_ARCH}/kubectl" \
+  && chmod +x /usr/local/bin/kubectl
+
+ARG OPENSHELL_VERSION
+RUN ARCH="$(uname -m)" \
+  && case "$ARCH" in \
+       x86_64) TARGET="x86_64-unknown-linux-gnu" ;; \
+       aarch64) TARGET="aarch64-unknown-linux-gnu" ;; \
+       *) echo "unsupported arch: $ARCH" >&2; exit 1 ;; \
+     esac \
+  && curl -fsSL -o /tmp/openshell.tar.gz \
+       "https://github.com/NVIDIA/OpenShell/releases/download/v${OPENSHELL_VERSION}/openshell-${TARGET}.tar.gz" \
+  && tar -xzf /tmp/openshell.tar.gz -C /usr/local/bin openshell \
+  && rm /tmp/openshell.tar.gz \
+  && openshell --version || true
+
+COPY --from=policy-egress-builder /src/target/release/openshell-policy-egress /usr/local/bin/openshell-policy-egress
+COPY examples/gitops-policy/apply-policy-gitops.sh /usr/local/bin/apply-policy-gitops.sh
+COPY examples/gitops-policy/sync-global-policy.sh /usr/local/bin/sync-global-policy.sh
+RUN chmod +x /usr/local/bin/openshell-policy-egress \
+    /usr/local/bin/apply-policy-gitops.sh \
+    /usr/local/bin/sync-global-policy.sh

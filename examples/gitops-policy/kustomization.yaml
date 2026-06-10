@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Kustomize root — Argo CD Application path must be repo root ("."), not k8s/.
+# Kustomize forbids file references outside the kustomization directory (no ../policy.yaml).
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: openshell
+configMapGenerator:
+  - name: openshell-policy
+    files:
+      - policy.yaml
+    options:
+      # Stable name so the PostSync Job volume ref (openshell-policy) resolves.
+      # Hashed names (openshell-policy-xxxxx) break hook Jobs under Argo CD.
+      disableNameSuffixHash: true
+      labels:
+        app.kubernetes.io/part-of: openshell
+        app.kubernetes.io/component: policy-gitops
+resources:
+  - k8s/rbac-policy-syncer.yaml
+  - k8s/job-sync-global-policy.yaml

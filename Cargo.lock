@@ -3598,6 +3598,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "openshell-policy-egress"
+version = "0.0.0"
+dependencies = [
+ "openshell-core",
+ "openshell-policy",
+ "regex",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "openshell-prover"
 version = "0.0.0"
 dependencies = [

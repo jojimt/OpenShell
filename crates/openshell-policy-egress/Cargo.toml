@@ -1,0 +1,24 @@
+# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "openshell-policy-egress"
+description = "Compile OpenShell sandbox policy into external L4 (NetworkPolicy / EgressFirewall) and L7 (NGINX) artifacts"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+openshell-core = { path = "../openshell-core" }
+openshell-policy = { path = "../openshell-policy" }
+regex = "1"
+thiserror = "2"
+
+[[bin]]
+name = "openshell-policy-egress"
+path = "src/bin/openshell-policy-egress.rs"
+
+[lints]
+workspace = true
