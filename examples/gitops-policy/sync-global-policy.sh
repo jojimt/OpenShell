@@ -19,4 +19,4 @@ cp /mtls/tls.key "${MTLS_DIR}/tls.key"
 "${OPENSHELL}" gateway add "${ENDPOINT}" --name "${NAME}" --local
 "${OPENSHELL}" gateway select "${NAME}"
 "${OPENSHELL}" policy set --global --policy "${POLICY_FILE}" --yes
-"${OPENSHELL}" policy get --global --policy-only
+"${OPENSHELL}" policy get --global -o json
